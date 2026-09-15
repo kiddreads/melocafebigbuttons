@@ -9,7 +9,6 @@
 
 #define CACHE_PAGE_SIZE        0x400
 #define CACHE_PAGE_SIZE_M1    (CACHE_PAGE_SIZE-1)
-#define DC_FLUSH_SEQUENTIAL_PAGE_BATCH 16
 
 uint32 g_currentCacheChronon = 0;
 
@@ -1715,7 +1714,6 @@ SparseBitset* s_DCFlushQueueAlternate = new SparseBitset();
 std::atomic<uint32> s_DCFlushQueueEpoch{0};
 
 thread_local uint32 s_lastDCFlushQueueEpoch = std::numeric_limits<uint32>::max();
-thread_local uint32 s_lastDCFlushQueuePage = std::numeric_limits<uint32>::max();
 thread_local uint32 s_lastDCFlushQueueRangeFirst = std::numeric_limits<uint32>::max();
 thread_local uint32 s_lastDCFlushQueueRangeLast = std::numeric_limits<uint32>::max();
 
@@ -1725,37 +1723,23 @@ void LatteBufferCache_notifyDCFlush(MPTR address, uint32 size)
         return; // global flushes are ignored for now
 
     uint32 firstPage = address / CACHE_PAGE_SIZE;
-    uint32 lastPage = (uint32)(((uint64)address + size - 1) / CACHE_PAGE_SIZE);
+    uint32 lastPage = (uint32)(std::min<uint64>((uint64)address + size - 1, std::numeric_limits<uint32>::max()) / CACHE_PAGE_SIZE);
     uint32 queueEpoch = s_DCFlushQueueEpoch.load(std::memory_order_relaxed);
-    const bool isSinglePage = firstPage == lastPage;
     if (s_lastDCFlushQueueEpoch == queueEpoch &&
         firstPage >= s_lastDCFlushQueueRangeFirst &&
         lastPage <= s_lastDCFlushQueueRangeLast)
     {
-        if (isSinglePage)
-            s_lastDCFlushQueuePage = firstPage;
         return;
     }
     
-    bool batchSequentialPages = false;
-    if (isSinglePage && s_lastDCFlushQueueEpoch == queueEpoch)
-        batchSequentialPages = s_lastDCFlushQueuePage != std::numeric_limits<uint32>::max() && firstPage == (s_lastDCFlushQueuePage + 1);
-    
-    uint32 publishLastPage = lastPage;
-    if (batchSequentialPages)
-    {
-        const uint32 maxPage = std::numeric_limits<uint32>::max();
-        publishLastPage = std::min<uint32>(firstPage + std::min<uint32>(DC_FLUSH_SEQUENTIAL_PAGE_BATCH - 1, maxPage - firstPage), maxPage);
-    }
     
     g_spinlockDCFlushQueue.lock();
-    s_DCFlushQueue->SetRange(firstPage, publishLastPage);
+    s_DCFlushQueue->SetRange(firstPage, lastPage);
     g_spinlockDCFlushQueue.unlock();
 
     s_lastDCFlushQueueEpoch = queueEpoch;
     s_lastDCFlushQueueRangeFirst = firstPage;
-    s_lastDCFlushQueueRangeLast = publishLastPage;
-    s_lastDCFlushQueuePage = isSinglePage ? firstPage : publishLastPage;
+    s_lastDCFlushQueueRangeLast = lastPage;
 }
 
 namespace

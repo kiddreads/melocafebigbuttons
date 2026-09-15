@@ -30,30 +30,52 @@ struct EmulationView: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            
+
             GeometryReader { geometry in
                 let portrait = geometry.size.height >= geometry.size.width
-                if screenLayout == .smallGamePadTopRight && !air.connected {
-                    let padWidth = geometry.size.width * 0.25
-                    let padHeight = min(padWidth * 9 / 16, geometry.size.height)
-                    HStack(alignment: .top, spacing: 0) {
-                        MetalViewContainer(metalView: cemuView)
-                            .frame(width: geometry.size.width - padWidth,
-                                   height: geometry.size.height)
-                        MetalViewContainer(metalView: cemuPadView)
-                            .frame(width: padWidth, height: padHeight)
-                    }
-                } else if portrait {
-                    VStack(spacing: 0) { screens }
+                let phonePortrait =
+                    UIDevice.current.userInterfaceIdiom == .phone && portrait
+
+                if phonePortrait {
+                    screensSizeLayout(in: geometry.size)
                 } else {
-                    HStack(spacing: 0) { screens }
+                    ZStack {
+                        if screenLayout == .smallGamePadTopRight && !air.connected {
+                            let padWidth = geometry.size.width * 0.25
+                            let padHeight = min(
+                                padWidth * 9 / 16,
+                                geometry.size.height
+                            )
+
+                            HStack(alignment: .top, spacing: 0) {
+                                MetalViewContainer(metalView: cemuView)
+                                    .frame(
+                                        width: geometry.size.width - padWidth,
+                                        height: geometry.size.height
+                                    )
+
+                                MetalViewContainer(metalView: cemuPadView)
+                                    .frame(width: padWidth, height: padHeight)
+                            }
+                        } else if portrait {
+                            VStack(spacing: 0) { screens }
+                        } else {
+                            HStack(spacing: 0) { screens }
+                        }
+
+                        if controllerManager.hasVirtual() {
+                            ControllerView(
+                                controller: controllerHandler,
+                                isEditing: false
+                            )
+                        }
+                    }
                 }
             }
-            .ignoresSafeArea(.all, edges: verticalSizeClass == .regular ? .horizontal : .all)
-            
-            if controllerManager.hasVirtual() {
-                ControllerView(controller: controllerHandler, isEditing: false)
-            }
+            .ignoresSafeArea(
+                .all,
+                edges: verticalSizeClass == .regular ? .horizontal : .all
+            )
         }
         .overlay(alignment: .topLeading) {
             if showSwapButton && screenLayout == .singleScreen && !air.connected {
@@ -98,6 +120,34 @@ struct EmulationView: View {
             Air.stop()
             CemuUIKit_SetVisibleOutputs(false, false)
         }
+    }
+    
+    private func screensSizeLayout(in size: CGSize) -> some View {
+        let screenHeight = size.width * 9.0 / 16.0
+
+        return VStack(spacing: 0) {
+            ForEach(visibleScreens, id: \.self) { main in
+                MetalViewContainer(
+                    metalView: main ? cemuView : cemuPadView
+                )
+                .frame(width: size.width, height: screenHeight)
+            }
+
+            if controllerManager.hasVirtual() {
+                ControllerView(
+                    controller: controllerHandler,
+                    isEditing: false
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                Spacer(minLength: 0)
+            }
+        }
+        .frame(
+            width: size.width,
+            height: size.height,
+            alignment: .top
+        )
     }
     
     private var screens: some View {

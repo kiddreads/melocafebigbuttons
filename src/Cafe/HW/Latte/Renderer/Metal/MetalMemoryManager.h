@@ -5,11 +5,38 @@
 
 #include "GameProfile/GameProfile.h"
 
+#include <array>
+
+struct MetalArgumentBinding
+{
+    enum class Type { Unused, Buffer, Texture, Sampler, Constant };
+    Type type = Type::Unused;
+    void* resource = nullptr;
+    size_t value = 0;
+
+    bool operator==(const MetalArgumentBinding&) const = default;
+};
+
+using MetalArgumentBindings = std::array<MetalArgumentBinding, MetalArgumentBuffer::IndexType + 1>;
+
 class MetalMemoryManager
 {
 public:
-    MetalMemoryManager(class MetalRenderer* metalRenderer) : m_mtlr{metalRenderer}, m_stagingAllocator(m_mtlr, m_mtlr->GetOptimalBufferStorageMode(), 32u * 1024 * 1024), m_indexAllocator(m_mtlr, m_mtlr->GetOptimalBufferStorageMode(), 4u * 1024 * 1024) {}
+    MetalMemoryManager(class MetalRenderer* metalRenderer) : m_mtlr{metalRenderer}, m_stagingAllocator(m_mtlr, m_mtlr->GetOptimalBufferStorageMode(), 32u * 1024 * 1024), m_indexAllocator(m_mtlr, m_mtlr->GetOptimalBufferStorageMode(), 4u * 1024 * 1024), m_snapshotAllocator(m_mtlr, m_mtlr->GetOptimalBufferStorageMode(), 4u * 1024 * 1024) {}
     ~MetalMemoryManager();
+
+    static constexpr uint32 VertexSnapshotBase = 0;
+    static constexpr uint32 UniformSnapshotBase = VertexSnapshotBase + MAX_MTL_VERTEX_BUFFERS;
+    static constexpr uint32 SupportSnapshotBase = UniformSnapshotBase + METAL_GENERAL_SHADER_TYPE_TOTAL * MAX_MTL_BUFFERS;
+    static constexpr uint32 SnapshotCount = SupportSnapshotBase + METAL_SHADER_TYPE_TOTAL;
+    
+    
+    MetalSynchronizedHeapAllocator::AllocatorReservation* GetCachedSnapshot(uint32 slot, const void* data, uint32 size, uint32 firstByte = 0);
+    MetalSynchronizedHeapAllocator::AllocatorReservation* GetCachedArgumentBuffer(uint32 stage, MTL::ArgumentEncoder* encoder, const MetalArgumentBindings& bindings);
+    void GetSnapshotStats(uint32& numBuffers, size_t& totalSize, size_t& freeSize) const
+    {
+        m_snapshotAllocator.GetStats(numBuffers, totalSize, freeSize);
+    }
 
     MetalSynchronizedRingAllocator& GetStagingAllocator()
     {
@@ -35,6 +62,7 @@ public:
     {
         m_stagingAllocator.CleanupBuffer(latestFinishedCommandBuffer);
         m_indexAllocator.CleanupBuffer(latestFinishedCommandBuffer);
+        m_snapshotAllocator.CleanupBuffer(latestFinishedCommandBuffer);
         m_sharedTracker.Complete(latestFinishedCommandBuffer);
     }
 
@@ -98,6 +126,21 @@ private:
 
     MetalSynchronizedRingAllocator m_stagingAllocator;
     MetalSynchronizedHeapAllocator m_indexAllocator;
+    MetalSynchronizedHeapAllocator m_snapshotAllocator;
+
+    struct BufferSnapshot
+    {
+        MetalSynchronizedHeapAllocator::AllocatorReservation* allocation = nullptr;
+        uint32 firstByte = 0;
+        uint32 endByte = 0;
+    } m_snapshots[SnapshotCount]{};
+
+    struct ArgumentSnapshot
+    {
+        MTL::ArgumentEncoder* encoder = nullptr; // retained to keep layout identity stable
+        MetalArgumentBindings bindings{};
+        MetalSynchronizedHeapAllocator::AllocatorReservation* allocation = nullptr;
+    } m_argumentSnapshots[METAL_SHADER_TYPE_TOTAL]{};
 
     MTL::Buffer* m_bufferCache = nullptr;
     MTL::Buffer* m_importedMemoryBuffer = nullptr;

@@ -55,6 +55,8 @@ struct GamesListView: View {
                                 for url in urls {
                                     try? FileManager.default.copyItem(at: url, to: .romsURL.appendingPathComponent(url.lastPathComponent))
                                 }
+                                
+                                gamesList.loadGames() // forgot this when uploading to the damn AppStore, i'm stupid :sob: -stossy11
                             case .failure(let err):
                                 AppAlerts.showSyncAlert(title: "ROM Import Failed.", message: err.localizedDescription)
                             }

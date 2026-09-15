@@ -10,6 +10,10 @@ public:
     uint32 m_manualVertexFetchDraws = 0;
     uint32 m_meshDraws = 0;
     uint32 m_triangleFans = 0;
+    uint64 m_snapshotBytes = 0;
+    uint32 m_snapshotReuses = 0;
+    uint32 m_argumentBufferEncodes = 0;
+    uint32 m_argumentBufferReuses = 0;
 
     MetalPerformanceMonitor() = default;
     ~MetalPerformanceMonitor() = default;
@@ -22,5 +26,9 @@ public:
         m_manualVertexFetchDraws = 0;
         m_meshDraws = 0;
         m_triangleFans = 0;
+        m_snapshotBytes = 0;
+        m_snapshotReuses = 0;
+        m_argumentBufferEncodes = 0;
+        m_argumentBufferReuses = 0;
     }
 };
