@@ -21,12 +21,7 @@ final class MainSceneDelegate: UIResponder, UIWindowSceneDelegate {
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession,
                options connectionOptions: UIScene.ConnectionOptions) {
         guard let windowScene = scene as? UIWindowScene else { return }
-        let controller: ContentHostingController
-        if #available(iOS 27.0, *) {
-            controller = AccessoryContentHostingController()
-        } else {
-            controller = ContentHostingController()
-        }
+        let controller = ContentHostingController()
         let window = UIWindow(windowScene: windowScene)
         self.window = window
         
@@ -140,22 +135,5 @@ class ContentHostingController: UIHostingController<AnyView> {
               !GCController.controllers().isEmpty else { return }
         
         ControllerManager.shared.searchForControllers()
-    }
-}
-
-@available(iOS 27.0, *)
-final class AccessoryContentHostingController: ContentHostingController {
-    private var displayRegistration: UISceneAccessoryRegistration?
-    private var playbackSubscription: AnyCancellable?
-    
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        let configuration = UISceneConfiguration()
-        configuration.delegateClass = ExternalDisplaySceneDelegate.self
-        let registration = registerSceneAccessory(.externalNonInteractive(sceneConfiguration: configuration))
-        displayRegistration = registration
-        playbackSubscription = Air.shared.$isPlaying.sink { [weak registration] playing in
-            registration?.isEnabled = playing
-        }
     }
 }
