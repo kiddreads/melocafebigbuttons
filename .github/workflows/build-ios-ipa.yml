@@ -99,7 +99,9 @@ jobs:
         # before the app is linked against them.
         run: |
           set -eo pipefail
-          cmake --build build --config Release --target CemuBin 2>&1 | tee core-build.log
+          cmake --build build --config Release --target CemuBin -- \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            2>&1 | tee core-build.log
 
       - name: Build the MeloCafe app
         run: |
