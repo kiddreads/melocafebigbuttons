@@ -33,9 +33,20 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Select Xcode and show toolchain
+      - name: Select the newest available Xcode
+        # Melo-Controller (a remote SPM package the MeloCafe target depends on) uses
+        # the optional default in string interpolation ("\(x, default: "y")"), which
+        # needs Swift 6.2+. The runner's default Xcode may reject that as
+        # "extra argument 'default' in call", so pick whichever Xcode is newest on
+        # the runner instead of hardcoding a version that may not exist on it. Used
+        # for both the CMake configure/build below and the final app build, so the
+        # Cemu core and the app are built with the same toolchain throughout.
         run: |
-          sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+          set -eo pipefail
+          echo "Installed Xcodes:"; ls -d /Applications/Xcode*.app 2>/dev/null
+          NEWEST=$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -n1)
+          echo "Selecting $NEWEST"
+          sudo xcode-select -s "$NEWEST/Contents/Developer"
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-path
 
@@ -74,20 +85,21 @@ jobs:
           path: .vcpkg-archives
           key: melocafebigbuttons-vcpkg-arm64-ios-${{ steps.vcpkg.outputs.rev }}-${{ hashFiles('vcpkg.json', 'triplets/**', 'dependencies/vcpkg_overlay_ports/**', 'dependencies/vcpkg_overlay_ports_mac/**') }}
 
-      - name: Select the newest available Xcode for the app
-        # Melo-Controller (a remote SPM package the MeloCafe target depends on) uses
-        # the optional default in string interpolation ("\(x, default: "y")"), which
-        # needs Swift 6.2+. The runner's default Xcode may reject that as
-        # "extra argument 'default' in call", so pick whichever Xcode is newest on
-        # the runner instead of hardcoding a version that may not exist on it.
+      - name: Build the Cemu core (CemuBin) for iOS
+        # MeloCafe.xcodeproj links against libraries produced by build/src/cemuMain.xcodeproj
+        # (CemuCafe, which in turn links the vendored ih264d/ZArchive/xbyak_aarch64
+        # dependency targets - all declared EXCLUDE_FROM_ALL in CMakeLists.txt, so
+        # they are not part of Xcode's default ALL_BUILD). Building the MeloCafe
+        # scheme directly relies on xcodebuild resolving that whole dependency chain
+        # through the project reference, which it did not: the app link step failed
+        # with "no such file or directory" for libih264d.a/libzarchive.a/
+        # libxbyak_aarch64.a because nothing had built them yet. Building the actual
+        # CemuBin target through CMake first (which does walk target_link_libraries
+        # regardless of EXCLUDE_FROM_ALL) guarantees those .a files exist on disk
+        # before the app is linked against them.
         run: |
           set -eo pipefail
-          echo "Installed Xcodes:"; ls -d /Applications/Xcode*.app 2>/dev/null
-          NEWEST=$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -n1)
-          echo "Selecting $NEWEST"
-          sudo xcode-select -s "$NEWEST/Contents/Developer"
-          xcodebuild -version
-          xcrun --sdk iphoneos --show-sdk-version
+          cmake --build build --config Release --target CemuBin 2>&1 | tee core-build.log
 
       - name: Build the MeloCafe app
         run: |
@@ -121,6 +133,7 @@ jobs:
           name: ios-ipa-build-logs
           path: |
             configure.log
+            core-build.log
             xcodebuild.log
           if-no-files-found: warn
           retention-days: 30
