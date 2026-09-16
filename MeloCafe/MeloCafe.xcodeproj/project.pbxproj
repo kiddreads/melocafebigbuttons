@@ -542,7 +542,7 @@
 /* Begin XCRemoteSwiftPackageReference section */
 		4E442DEB2F5DB3EC00DD0F47 /* XCRemoteSwiftPackageReference "Melo-Controller" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/stossy11/Melo-Controller";
+			repositoryURL = "https://github.com/kiddreads/Melo-Controller";
 			requirement = {
 				branch = main;
 				kind = branch;

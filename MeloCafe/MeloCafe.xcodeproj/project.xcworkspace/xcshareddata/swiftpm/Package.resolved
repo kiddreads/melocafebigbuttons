@@ -4,10 +4,10 @@
     {
       "identity" : "melo-controller",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/stossy11/Melo-Controller",
+      "location" : "https://github.com/kiddreads/Melo-Controller",
       "state" : {
         "branch" : "main",
-        "revision" : "e39c6b7b87dc44dbbf548dc1e28fd6f0b0a5d609"
+        "revision" : "f5d177ab2f71376708eb4ba5e87ffde24b3e6c74"
       }
     }
   ],
